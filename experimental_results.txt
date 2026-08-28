@@ -1,0 +1,48 @@
+LPA* Safe Semantic Planner -- Assignment 1 Verification Suite
+================================================================
+
+=== Test Case 1: Basic Reachability ===
+  success=true path=[0 -> 1 -> 2 -> 3] cost=3 safetyDist=0 expanded=4 time=0.0031ms
+  [PASS] planner reaches goal
+  [PASS] unique path S->A->B->G found
+  [PASS] total cost == 3.0
+
+=== Test Case 2: Bad State Avoidance ===
+  success=true path=[0 -> 3 -> 5 -> 4] cost=3.0000 safetyDist=1.4142 expanded=5 time=0.0027ms
+  [PASS] planner reaches goal
+  [PASS] bad state X never visited
+  [PASS] safe alternative path selected
+
+=== Test Case 3: Safety Margin Trade-off ===
+-- weighting cost only (safetyWeight=0) --
+  success=true path=[0 -> 1 -> 3] cost=2.0000 safetyDist=0.1000 expanded=4 time=0.0022ms
+  [PASS] cost-dominant planner picks cheap/close path
+-- weighting safety heavily (safetyWeight=5) --
+  success=true path=[0 -> 2 -> 3] cost=4.0000 safetyDist=1.0000 expanded=3 time=0.0016ms
+  [PASS] safety-dominant planner picks farther/safer path
+  Explanation: effective edge weight = cost*(1+relW*(1-reliability)) + safetyW*(1-safety). Raising safetyWeight increases the penalty for low-safety edges until the safer, costlier path becomes cheaper overall. This is a direct implementation of Score(P) = aG - bC + gD + dR: C and D trade off through the safetyWeight scalarization coefficient.
+
+=== Test Case 4: Dynamic Transition (incremental) ===
+  success=true path=[0 -> 1 -> 2] cost=2.0000 safetyDist=0.0000 expanded=3 time=0.0010ms
+  [PASS] initial path S->A->G found
+  success=false path=[] cost=inf safetyDist=0.0000 expanded=4 time=0.0004ms
+  [PASS] planner correctly reports no path once (A,G) is down and no alternative exists yet
+  success=true path=[0 -> 3 -> 2] cost=3.0000 safetyDist=0.0000 expanded=6 time=0.0006ms
+  [PASS] alternative path found after adding S->B->G
+  expanded on this incremental update: 6 (full replan from scratch would touch every vertex; LPA* only reprocesses vertices whose rhs actually changed).
+
+=== Test Case 5: Goal Update ===
+  success=true path=[0 -> 1 -> 2] cost=2.0000 safetyDist=0.0000 expanded=4 time=0.0014ms
+  [PASS] initial plan reaches original goal (state 2)
+  success=true path=[0 -> 3] cost=1.0000 safetyDist=0.0000 expanded=4 time=0.0001ms
+  [PASS] revised path reaches NEW goal (state 3)
+  Note: setGoal() reused all existing g/rhs values (no reinitialization); only the goal-relative priority keys were recomputed for the open list, per LPA* theory (rhs(s) depends solely on predecessors' g-values, never on the goal).
+
+=== Test Case 6: Transition Addition (shortcut) ===
+  success=true path=[0 -> 1 -> 2 -> 3] cost=3.0000 safetyDist=0.0000 expanded=4 time=0.0010ms
+  [PASS] baseline path cost 3.0 via S->A->B->G
+  success=true path=[0 -> 3] cost=0.5000 safetyDist=0.0000 expanded=5 time=0.0002ms
+  [PASS] shortcut S->G discovered and adopted (cost 0.5 < 3.0)
+
+================================================================
+TOTAL: 15 passed, 0 failed  -> ALL CONDITIONS SATISFIED

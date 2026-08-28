@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Semantic Planner — Finite Cartesian State Space</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#ece4d1;
+    --bg-panel:#f5efdf;
+    --bg-panel2:#fffdf6;
+    --line:#d8cca9;
+    --grid:rgba(23,19,10,.14);
+    --ink:#171310;
+    --text:#171310;
+    --text-dim:#66594a;
+    --text-faint:#9c8f76;
+    --safe:#0d8f74;
+    --safe-dim:#d7efe6;
+    --bad:#ae3626;
+    --bad-dim:#f4dcd5;
+    --amber:#9c6a0c;
+    --amber-dim:#f6e8c9;
+    --init:#1d4ed8;
+    --goal:#6d28d9;
+    --radius:6px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg-deep);color:var(--text);
+    font-family:'JetBrains Mono',monospace;}
+  h1,h2,h3,.disp{font-family:'Space Grotesk',sans-serif;}
+  ::selection{background:var(--safe-dim);}
+
+  #app{display:flex;flex-direction:column;height:100vh;min-height:640px;}
+
+  header{
+    display:flex;align-items:baseline;gap:14px;
+    padding:14px 20px;border-bottom:2px solid var(--ink);
+    background:var(--bg-panel);
+    flex-shrink:0;
+  }
+  header .mark{
+    width:10px;height:10px;border-radius:50%;background:var(--safe);
+    box-shadow:0 0 0 3px var(--safe-dim);flex-shrink:0;
+    animation:pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+  header h1{font-size:17px;font-weight:700;margin:0;letter-spacing:.01em;color:var(--ink);}
+  header .sub{color:var(--text-dim);font-size:11.5px;letter-spacing:.03em;}
+  header .spacer{flex:1;}
+  header .badge{
+    font-size:10.5px;color:var(--text-dim);border:1.5px solid var(--ink);
+    padding:3px 9px;border-radius:20px;letter-spacing:.04em;background:var(--bg-panel2);
+  }
+
+  #body{display:flex;flex:1;min-height:0;}
+
+  /* ---- LEFT RAIL ---- */
+  #rail{
+    width:290px;flex-shrink:0;background:var(--bg-panel);
+    border-right:2px solid var(--ink);overflow-y:auto;padding:16px;
+  }
+  .sec{margin-bottom:20px;}
+  .sec-title{
+    font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+    color:var(--ink);letter-spacing:.08em;text-transform:uppercase;
+    margin:0 0 9px 0;display:flex;align-items:center;gap:6px;
+  }
+  .sec-title::after{content:"";flex:1;height:1px;background:var(--line);}
+
+  select, button, input[type=range]{font-family:inherit;}
+  select{
+    width:100%;background:var(--bg-panel2);color:var(--ink);
+    border:1.5px solid var(--ink);border-radius:var(--radius);
+    padding:8px 9px;font-size:12.5px;margin-bottom:6px;cursor:pointer;
+  }
+  .btnrow{display:flex;flex-wrap:wrap;gap:6px;}
+  button{
+    background:var(--bg-panel2);color:var(--ink);border:1.5px solid var(--ink);
+    border-radius:var(--radius);padding:7px 10px;font-size:11.5px;cursor:pointer;
+    transition:border-color .15s, background .15s, color .15s, transform .1s;
+  }
+  button:hover{background:var(--bg-deep);}
+  button:active{transform:translateY(1px);}
+  button.wide{width:100%;}
+  button.on{background:var(--ink);border-color:var(--ink);color:var(--bg-panel2);}
+  button.primary{background:var(--safe);color:#fff;border-color:var(--safe);font-weight:700;}
+  button.primary:hover{background:#0a7a63;}
+  button.danger{border-color:var(--bad);color:var(--bad);}
+  button.danger:hover{background:var(--bad-dim);}
+  button:disabled{opacity:.35;cursor:not-allowed;}
+  button:focus-visible, select:focus-visible, input:focus-visible{
+    outline:2px solid var(--safe);outline-offset:1px;
+  }
+
+  .mode-hint{
+    font-size:11px;color:var(--text-dim);line-height:1.5;
+    background:var(--bg-panel2);border:1px dashed var(--text-faint);
+    border-radius:var(--radius);padding:8px 9px;margin-top:8px;
+  }
+  .mode-hint b{color:var(--ink);}
+
+  .weight-row{margin-bottom:10px;}
+  .weight-row label{
+    display:flex;justify-content:space-between;font-size:11.5px;
+    color:var(--text-dim);margin-bottom:4px;
+  }
+  .weight-row output{color:var(--amber);font-weight:700;}
+  input[type=range]{width:100%;accent-color:var(--safe);height:4px;background:transparent;}
+
+  .legend{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--text-dim);}
+  .legend span{display:inline-flex;align-items:center;gap:7px;}
+  .swatch{width:11px;height:11px;border-radius:3px;flex-shrink:0;border:1.5px solid var(--ink);}
+
+  /* ---- CANVAS ---- */
+  #canvas-wrap{flex:1;position:relative;overflow:hidden;background:var(--bg-deep);}
+  svg#canvas{width:100%;height:100%;display:block;cursor:crosshair;}
+  .grid-dot{fill:var(--grid);}
+
+  #canvas-hint{
+    position:absolute;bottom:12px;left:12px;right:12px;
+    font-size:11.5px;color:var(--text-dim);
+    background:var(--bg-panel2);border:1.5px solid var(--ink);border-radius:8px;padding:8px 12px;
+    display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    pointer-events:none;
+  }
+  #canvas-hint b{color:var(--ink);}
+  #canvas-hint .metrics{display:flex;gap:16px;flex-wrap:wrap;}
+  #canvas-hint .metrics span{color:var(--text-dim);}
+  #canvas-hint .metrics b{color:var(--safe);}
+
+  /* ---- edges ---- */
+  .edge-line{stroke:var(--ink);stroke-width:2.2;fill:none;transition:stroke .2s,opacity .2s;}
+  .edge-line.unavailable{stroke:var(--bad);stroke-dasharray:3 5;opacity:.5;}
+  .edge-line.path{stroke:var(--safe);stroke-width:3.6;}
+  .edge-hit{stroke:transparent;stroke-width:16;fill:none;cursor:pointer;}
+  .edge-label{fill:var(--text-dim);font-size:10px;font-family:'JetBrains Mono',monospace;pointer-events:none;
+    paint-order:stroke; stroke:var(--bg-deep); stroke-width:3px;}
+  .edge-label.path{fill:var(--safe);font-weight:700;}
+  .edge-arrow{fill:var(--ink);}
+  .edge-arrow.path{fill:var(--safe);}
+  .edge-arrow.unavailable{fill:var(--bad);}
+  .drag-line{stroke:var(--amber);stroke-width:2.4;stroke-dasharray:6 5;fill:none;pointer-events:none;
+    animation:dash-march .5s linear infinite;}
+  @keyframes dash-march{to{stroke-dashoffset:-22;}}
+
+  @keyframes drawEdgeIn{from{stroke-dashoffset:var(--len);}to{stroke-dashoffset:0;}}
+  .edge-line.just-added{animation:drawEdgeIn .38s ease-out both;}
+
+  /* ---- nodes ---- */
+  .node circle.body{fill:var(--bg-panel2);stroke:var(--ink);stroke-width:2.2;transition:all .18s;}
+  .node.bad circle.body{fill:var(--bad-dim);stroke:var(--bad);}
+  .node.init circle.body{stroke:var(--init);stroke-width:3.4;}
+  .node.goal circle.body{stroke:var(--goal);stroke-width:3.4;}
+  .node.expanded circle.body{fill:var(--amber-dim);stroke:var(--amber);}
+  .node.path circle.body{fill:var(--safe-dim);stroke:var(--safe);stroke-width:3.4;}
+  .node.selected circle.body{stroke:var(--ink);stroke-width:3.4;stroke-dasharray:2 2;}
+  .node.drag-source circle.body{stroke:var(--amber);stroke-width:3.4;}
+  .node text{fill:var(--ink);font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;
+    text-anchor:middle;dominant-baseline:central;pointer-events:none;}
+  .node .tag{fill:var(--text-faint);font-size:8.5px;text-anchor:middle;pointer-events:none;letter-spacing:.05em;}
+  .node{cursor:pointer;}
+
+  @keyframes popIn{
+    0%{transform:scale(.2);opacity:0;}
+    65%{transform:scale(1.18);opacity:1;}
+    100%{transform:scale(1);opacity:1;}
+  }
+  .node-inner.just-added{animation:popIn .34s cubic-bezier(.34,1.56,.64,1) both;transform-origin:center;}
+  .node-inner.just-added circle.body{stroke:var(--safe);}
+  .node.move-mode{cursor:grab;}
+  .node.move-mode.moving{cursor:grabbing;}
+
+  /* ---- transition-creation popover (HTML overlay) ---- */
+  #trans-panel{
+    position:absolute;z-index:20;width:230px;
+    background:var(--bg-panel2);border:2px solid var(--ink);border-radius:10px;
+    padding:12px 14px;box-shadow:4px 4px 0 var(--ink);
+    opacity:0;transform:translate(-50%,-8px) scale(.92);pointer-events:none;
+    transition:opacity .16s ease-out, transform .16s ease-out;
+  }
+  #trans-panel.show{opacity:1;transform:translate(-50%,-16px) scale(1);pointer-events:auto;}
+  #trans-panel .tp-title{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:12.5px;
+    color:var(--ink);margin-bottom:9px;display:flex;align-items:center;gap:6px;}
+  #trans-panel .tp-title .arrow{color:var(--amber);}
+  #trans-panel .weight-row{margin-bottom:8px;}
+  #trans-panel .weight-row label{font-size:10.5px;}
+  #trans-panel .tp-btns{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
+  #trans-panel .tp-btns button{flex:1;font-size:11px;padding:6px;min-width:60px;}
+  #trans-panel .tp-avail{display:flex;align-items:center;justify-content:space-between;
+    font-size:10.5px;color:var(--text-dim);margin-bottom:8px;background:var(--bg-deep);
+    border:1px solid var(--line);border-radius:var(--radius);padding:6px 8px;}
+  #trans-panel .tp-avail button{padding:4px 9px;font-size:10.5px;}
+  #trans-panel::after{
+    content:"";position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);
+    width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;
+    border-top:8px solid var(--ink);
+  }
+  #trans-panel::before{
+    content:"";position:absolute;bottom:-5.5px;left:50%;transform:translateX(-50%);
+    width:0;height:0;border-left:6.5px solid transparent;border-right:6.5px solid transparent;
+    border-top:6.5px solid var(--bg-panel2);z-index:1;
+  }
+
+  /* ---- toast for quick feedback ---- */
+  #toast{
+    position:absolute;top:14px;left:50%;transform:translateX(-50%) translateY(-14px);
+    background:var(--ink);color:var(--bg-panel2);font-size:11.5px;padding:7px 14px;
+    border-radius:20px;opacity:0;transition:opacity .18s,transform .18s;pointer-events:none;z-index:30;
+    white-space:nowrap;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ---- LOG / RESULT PANEL ---- */
+  #log-panel{
+    width:300px;flex-shrink:0;background:var(--bg-panel);
+    border-left:2px solid var(--ink);display:flex;flex-direction:column;min-height:0;
+  }
+  #result-card{padding:14px 16px;border-bottom:2px solid var(--ink);}
+  #result-status{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;margin-bottom:8px;
+    display:flex;align-items:center;gap:8px;color:var(--ink);}
+  #result-status .dot{width:8px;height:8px;border-radius:50%;background:var(--text-faint);}
+  #result-status.ok .dot{background:var(--safe);}
+  #result-status.fail .dot{background:var(--bad);}
+  .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .metric{background:var(--bg-panel2);border:1.5px solid var(--line);border-radius:var(--radius);padding:7px 9px;}
+  .metric .k{font-size:9.5px;color:var(--text-dim);letter-spacing:.05em;text-transform:uppercase;}
+  .metric .v{font-size:14px;color:var(--ink);font-weight:700;margin-top:2px;}
+  .metric .v.safe{color:var(--safe);}
+  .metric .v.bad{color:var(--bad);}
+
+  #log{flex:1;overflow-y:auto;padding:10px 14px;font-size:11px;line-height:1.65;min-height:0;}
+  #log .entry{margin-bottom:2px;color:var(--text-dim);white-space:pre-wrap;}
+  #log .entry.evt{color:var(--ink);}
+  #log .entry.ok{color:var(--safe);}
+  #log .entry.err{color:var(--bad);}
+  #log .entry.hdr{color:var(--amber);font-weight:700;margin-top:8px;}
+  #log::-webkit-scrollbar,#rail::-webkit-scrollbar{width:8px;}
+  #log::-webkit-scrollbar-thumb,#rail::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+
+  /* ---- scenario guide panel ---- */
+  #guide-panel{
+    border-bottom:2px solid var(--ink);padding:12px 16px;
+    background:var(--amber-dim);flex-shrink:0;
+  }
+  #guide-title{
+    font-family:'Space Grotesk',sans-serif;font-size:10.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.07em;color:var(--amber);margin-bottom:7px;
+  }
+  #guide-steps{display:flex;flex-direction:column;gap:5px;}
+  .guide-step{
+    font-size:10.5px;line-height:1.55;color:var(--ink);
+    background:var(--bg-panel2);border:1px solid var(--line);
+    border-radius:var(--radius);padding:6px 8px;cursor:default;
+  }
+  .guide-step:hover{border-color:var(--amber);background:var(--amber-dim);}
+
+  @media (prefers-reduced-motion: reduce){
+    header .mark{animation:none;}
+    *{transition:none !important;animation-duration:.001s !important;}
+  }
+
+  @media (max-width:900px){
+    #body{flex-direction:column;}
+    #rail{width:100%;border-right:none;border-bottom:2px solid var(--ink);max-height:38vh;}
+    #log-panel{width:100%;border-left:none;border-top:2px solid var(--ink);max-height:32vh;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="mark"></div>
+    <h1>Semantic Planner</h1>
+    <div class="sub">Finite Cartesian State Space — LPA* safe path planning</div>
+    <div class="spacer"></div>
+    <div class="badge" id="graph-size">0 states · 0 transitions</div>
+  </header>
+
+  <div id="body">
+    <div id="rail">
+
+      <div class="sec">
+        <div class="sec-title">Scenario</div>
+        <select id="preset-select">
+          <option value="">— choose a scenario —</option>
+          <option value="tc1">TC1 · Basic Reachability</option>
+          <option value="tc2">TC2 · Hard Bad-State Avoidance</option>
+          <option value="tc3">TC3 · Safety-Weight Scalarisation</option>
+          <option value="tc4">TC4 · Dynamic Edge Loss &amp; Recovery</option>
+          <option value="tc5">TC5 · Incremental Goal Change</option>
+          <option value="tc6">TC6 · Shortcut Discovery</option>
+          <option value="blank">Blank — build from scratch</option>
+        </select>
+        <button class="wide" id="load-preset">Load scenario</button>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Edit mode</div>
+        <div class="btnrow">
+          <button data-mode="add-state" class="mode-btn">+ State</button>
+          <button data-mode="add-trans" class="mode-btn">+ Transition</button>
+          <button data-mode="move" class="mode-btn">Move</button>
+          <button data-mode="set-init" class="mode-btn">Set init</button>
+          <button data-mode="set-goal" class="mode-btn">Set goal</button>
+          <button data-mode="toggle-bad" class="mode-btn">Toggle bad</button>
+          <button data-mode="delete" class="mode-btn">Delete</button>
+        </div>
+        <div class="mode-hint" id="mode-hint">Drag any state to reposition it. Pick a mode for other edits. <b>+ Transition</b>: drag from one state to another.</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Objective weights</div>
+        <div class="weight-row">
+          <label><span>Safety weight</span><output id="sw-val">1.0</output></label>
+          <input type="range" id="safety-weight" min="0" max="6" step="0.1" value="1.0">
+        </div>
+        <div class="weight-row">
+          <label><span>Reliability weight</span><output id="rw-val">1.0</output></label>
+          <input type="range" id="reliability-weight" min="0" max="6" step="0.1" value="1.0">
+        </div>
+        <div class="weight-row">
+          <label><span>Animation speed</span><output id="sp-val">1.0×</output></label>
+          <input type="range" id="anim-speed" min="0.25" max="3" step="0.25" value="1">
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Run</div>
+        <div class="btnrow">
+          <button class="wide primary" id="btn-plan">▶ Plan (cold start)</button>
+        </div>
+        <div class="btnrow" style="margin-top:6px;">
+          <button class="wide" id="btn-replan">⟳ Replan (incremental)</button>
+        </div>
+        <div class="btnrow" style="margin-top:6px;">
+          <button class="wide" id="btn-stop" style="display:none;" title="Stop animation and return to edit mode">■ Stop animation</button>
+        </div>
+        <div class="btnrow" style="margin-top:10px;">
+          <button class="wide danger" id="btn-reset">Clear canvas</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title">Legend</div>
+        <div class="legend">
+          <span><span class="swatch" style="background:var(--bg-panel2);border-color:var(--init);"></span>Initial state</span>
+          <span><span class="swatch" style="background:var(--bg-panel2);border-color:var(--goal);"></span>Goal state</span>
+          <span><span class="swatch" style="background:var(--bad-dim);border-color:var(--bad);"></span>Bad state (hard-avoid)</span>
+          <span><span class="swatch" style="background:var(--amber-dim);border-color:var(--amber);"></span>Expanded during search</span>
+          <span><span class="swatch" style="background:var(--safe-dim);border-color:var(--safe);"></span>Selected safe path</span>
+          <span><span class="swatch" style="background:var(--bg-panel2);border-color:var(--bad);border-style:dashed;"></span>Unavailable transition</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="canvas-wrap">
+      <svg id="canvas">
+        <defs>
+          <pattern id="dotgrid" width="26" height="26" patternUnits="userSpaceOnUse">
+            <circle class="grid-dot" cx="1" cy="1" r="1"></circle>
+          </pattern>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="edge-arrow"></path>
+          </marker>
+          <marker id="arrow-path" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="edge-arrow path"></path>
+          </marker>
+          <marker id="arrow-unavail" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="edge-arrow unavailable"></path>
+          </marker>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#dotgrid)"></rect>
+        <g id="edge-layer"></g>
+        <g id="drag-layer"></g>
+        <g id="node-layer"></g>
+      </svg>
+      <div id="toast"></div>
+      <div id="trans-panel">
+        <div class="tp-title"><span id="tp-verb">New transition</span> <span id="tp-from"></span><span class="arrow">→</span><span id="tp-to"></span></div>
+        <div class="tp-avail" id="tp-avail-row" style="display:none;">
+          <span>Available</span>
+          <button id="tp-toggle-avail">ON</button>
+        </div>
+        <div class="weight-row">
+          <label><span>Cost</span><output id="tp-cost-val">1.0</output></label>
+          <input type="range" id="tp-cost" min="0" max="10" step="0.1" value="1">
+        </div>
+        <div class="weight-row">
+          <label><span>Safety</span><output id="tp-safety-val">1.0</output></label>
+          <input type="range" id="tp-safety" min="0" max="1" step="0.05" value="1">
+        </div>
+        <div class="weight-row">
+          <label><span>Reliability</span><output id="tp-rel-val">1.0</output></label>
+          <input type="range" id="tp-rel" min="0" max="1" step="0.05" value="1">
+        </div>
+        <div class="tp-btns">
+          <button id="tp-delete" class="danger" style="display:none;">Delete</button>
+          <button id="tp-cancel">Cancel</button>
+          <button id="tp-create" class="primary">Create ↵</button>
+        </div>
+      </div>
+      <div id="canvas-hint">
+        <span id="mode-label"><b>Mode:</b> none — click a mode button</span>
+        <span class="metrics" id="live-metrics"></span>
+      </div>
+    </div>
+
+    <div id="log-panel">
+      <div id="result-card">
+        <div id="result-status"><span class="dot"></span><span id="result-text">No plan run yet</span></div>
+        <div class="metric-grid">
+          <div class="metric"><div class="k">Total cost</div><div class="v" id="m-cost">—</div></div>
+          <div class="metric"><div class="k">Safety dist.</div><div class="v" id="m-safety">—</div></div>
+          <div class="metric"><div class="k">Expanded</div><div class="v" id="m-expanded">—</div></div>
+          <div class="metric"><div class="k">Plan time</div><div class="v" id="m-time">—</div></div>
+        </div>
+      </div>
+      <div id="guide-panel" style="display:none;">
+        <div id="guide-title"></div>
+        <div id="guide-steps"></div>
+      </div>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ============================================================
+// Data model
+// ============================================================
+let states = new Map();      // id -> {id,x,y,bad}
+let transitions = new Map(); // id -> {id,from,to,cost,safety,reliability,available}
+let initId = null, goalId = null;
+let nextStateId = 0, nextTransId = 0;
+let mode = null;
+let selectedNode = null;
+
+// drag-to-connect state
+let dragFrom = null;
+let dragLineEl = null;
+// drag-to-move state
+let movingId = null;
+let moveOffset = {dx:0, dy:0};
+let pendingConn = null;   // {from,to} when creating a NEW transition
+let editingTransId = null; // transition id when EDITING an existing one
+
+// LPA* live search state (persists across incremental updates)
+let g = new Map(), rhs = new Map();
+let planLoaded = false;
+
+const svg = document.getElementById('canvas');
+const canvasWrap = document.getElementById('canvas-wrap');
+const edgeLayer = document.getElementById('edge-layer');
+const nodeLayer = document.getElementById('node-layer');
+const dragLayer = document.getElementById('drag-layer');
+const logEl = document.getElementById('log');
+const modeLabel = document.getElementById('mode-label');
+const transPanel = document.getElementById('trans-panel');
+const toastEl = document.getElementById('toast');
+
+function log(msg, cls){
+  const d = document.createElement('div');
+  d.className = 'entry' + (cls ? ' '+cls : '');
+  d.textContent = msg;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function logHeader(msg){ log(msg, 'hdr'); }
+function clearLog(){ logEl.innerHTML=''; }
+let toastTimer=null;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1400);
+}
+
+// ============================================================
+// Geometry helpers
+// ============================================================
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function svgPoint(evt){
+  const r = svg.getBoundingClientRect();
+  return { x: evt.clientX - r.left, y: evt.clientY - r.top };
+}
+
+// ============================================================
+// LPA* engine (ported from include/lpastar_planner.hpp)
+// ============================================================
+function safetyWeight(){ return parseFloat(document.getElementById('safety-weight').value); }
+function reliabilityWeight(){ return parseFloat(document.getElementById('reliability-weight').value); }
+
+function successorsOf(id){
+  const out = [];
+  for (const t of transitions.values()) if (t.from === id) out.push(t);
+  return out;
+}
+function predecessorsOf(id){
+  const out = [];
+  for (const t of transitions.values()) if (t.to === id) out.push(t);
+  return out;
+}
+function edgeUsable(t){
+  const from = states.get(t.from), to = states.get(t.to);
+  return t.available && from && to && !from.bad && !to.bad;
+}
+function edgeWeight(t){
+  const riskFactor = 1 + reliabilityWeight() * (1 - t.reliability);
+  const safetyPenalty = safetyWeight() * (1 - t.safety);
+  return t.cost * riskFactor + safetyPenalty;
+}
+function getG(id){ return g.has(id) ? g.get(id) : Infinity; }
+function getRhs(id){ return rhs.has(id) ? rhs.get(id) : Infinity; }
+function heuristic(id){ return 0; } // scale=0 -> Dijkstra-equivalent, always admissible
+function calcKey(id){
+  const m = Math.min(getG(id), getRhs(id));
+  return [m + heuristic(id), m];
+}
+function keyLess(a,b){
+  if (Math.abs(a[0]-b[0])>1e-9) return a[0]<b[0];
+  return a[1] < b[1]-1e-9;
+}
+
+let openSet = new Map(); // id -> key
+
+function openInsert(id){ openSet.set(id, calcKey(id)); }
+function openRemove(id){ openSet.delete(id); }
+
+function initializeSearch(){
+  g = new Map(); rhs = new Map(); openSet = new Map();
+  if (initId===null) return;
+  rhs.set(initId, 0);
+  openInsert(initId);
+}
+
+function updateVertex(id){
+  if (id !== initId){
+    let best = Infinity;
+    for (const t of predecessorsOf(id)){
+      if (!edgeUsable(t)) continue;
+      const cand = getG(t.from) + edgeWeight(t);
+      if (cand < best) best = cand;
+    }
+    rhs.set(id, best);
+  }
+  openRemove(id);
+  if (Math.abs(getG(id) - getRhs(id)) > 1e-9) openInsert(id);
+}
+
+function findMinOpen(){
+  let best=null, bk=null;
+  for (const [id,k] of openSet){ if (bk===null || keyLess(k,bk)){ bk=k; best=id; } }
+  return [best,bk];
+}
+
+function computeShortestPath(){
+  const expandedOrder = [];
+  let guard = 0;
+  while (openSet.size>0 && guard++ < 20000){
+    const [u,kOld] = findMinOpen();
+    const gk = calcKey(goalId);
+    const stop = !keyLess(kOld, gk) && Math.abs(getRhs(goalId)-getG(goalId))<=1e-9;
+    if (stop) break;
+    expandedOrder.push(u);
+    const kNew = calcKey(u);
+    if (keyLess(kOld,kNew)){ openRemove(u); openInsert(u); continue; }
+    if (getG(u) > getRhs(u)){
+      g.set(u, getRhs(u));
+      openRemove(u);
+      for (const t of successorsOf(u)) if (edgeUsable(t)) updateVertex(t.to);
+    } else {
+      g.set(u, Infinity);
+      updateVertex(u);
+      for (const t of successorsOf(u)) if (edgeUsable(t)) updateVertex(t.to);
+    }
+  }
+  return expandedOrder;
+}
+
+function extractPath(){
+  if (goalId===null || getG(goalId)>=Infinity) return null;
+  const statePath=[goalId], transPath=[];
+  let cur = goalId, guardN=0;
+  while (cur !== initId){
+    if (++guardN > states.size+5) return null;
+    let best=Infinity, bestPred=null, bestT=null;
+    for (const t of predecessorsOf(cur)){
+      if (!edgeUsable(t)) continue;
+      const cand = getG(t.from)+edgeWeight(t);
+      if (cand < best-1e-9){ best=cand; bestPred=t.from; bestT=t.id; }
+    }
+    if (best>=Infinity) return null;
+    transPath.push(bestT); statePath.push(bestPred); cur=bestPred;
+  }
+  statePath.reverse(); transPath.reverse();
+  let totalCost=0;
+  for (const tid of transPath) totalCost += transitions.get(tid).cost;
+  let minDist=Infinity;
+  for (const sid of statePath){
+    const s = states.get(sid);
+    for (const b of states.values()) if (b.bad){
+      const d = dist(s,b); if (d<minDist) minDist=d;
+    }
+  }
+  if (minDist>=Infinity) minDist=0;
+  return {statePath, transPath, totalCost, safetyScore:minDist/40};
+}
+
+// ============================================================
+// Rendering
+// ============================================================
+function render(){
+  document.getElementById('graph-size').textContent =
+    states.size+' states · '+transitions.size+' transitions';
+  renderEdges();
+  renderNodes();
+}
+function fmt(n){ return (Math.round(n*100)/100).toString(); }
+function animSpeed(){ return parseFloat(document.getElementById('anim-speed').value); }
+
+function renderEdges(){
+  edgeLayer.innerHTML='';
+  for (const t of transitions.values()){
+    const a = states.get(t.from), b = states.get(t.to);
+    if (!a || !b) continue;
+    const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1;
+    const ux=dx/len, uy=dy/len;
+    const r=22;
+    const x1=a.x+ux*r, y1=a.y+uy*r, x2=b.x-ux*r, y2=b.y-uy*r;
+
+    const g_ = document.createElementNS('http://www.w3.org/2000/svg','g');
+
+    const hit = document.createElementNS('http://www.w3.org/2000/svg','line');
+    hit.setAttribute('class','edge-hit');
+    hit.setAttribute('x1',x1);hit.setAttribute('y1',y1);
+    hit.setAttribute('x2',x2);hit.setAttribute('y2',y2);
+    hit.addEventListener('click', (e)=>{ e.stopPropagation(); onEdgeClick(t.id); });
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    let cls='edge-line';
+    if (!t.available) cls+=' unavailable';
+    if (t._onPath) cls+=' path';
+    const justAdded = t._justAdded; t._justAdded=false;
+    if (justAdded) cls+=' just-added';
+    line.setAttribute('class',cls);
+    line.setAttribute('x1',x1);line.setAttribute('y1',y1);
+    line.setAttribute('x2',x2);line.setAttribute('y2',y2);
+    line.setAttribute('marker-end', t._onPath ? 'url(#arrow-path)' : (t.available?'url(#arrow)':'url(#arrow-unavail)'));
+    const L = Math.hypot(x2-x1,y2-y1);
+    if (justAdded){
+      line.style.setProperty('--len', L);
+      line.style.strokeDasharray = L;
+    }
+    if (t._onPath){
+      line.style.strokeDasharray = L;
+      line.style.strokeDashoffset = L;
+      line.style.transition = 'stroke-dashoffset '+(0.5/animSpeed())+'s linear '+ (t._pathDelay||0) +'s';
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{ line.style.strokeDashoffset=0; }));
+    }
+
+    const mx=(x1+x2)/2, my=(y1+y2)/2;
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('class','edge-label'+(t._onPath?' path':''));
+    label.setAttribute('x',mx); label.setAttribute('y',my-6);
+    label.setAttribute('text-anchor','middle');
+    label.textContent = 'c'+fmt(t.cost)+' s'+fmt(t.safety)+' r'+fmt(t.reliability)+(t.available?'':' ✕');
+
+    g_.appendChild(hit); g_.appendChild(line); g_.appendChild(label);
+    edgeLayer.appendChild(g_);
+  }
+}
+
+function renderNodes(){
+  nodeLayer.innerHTML='';
+  for (const s of states.values()){
+    const g_ = document.createElementNS('http://www.w3.org/2000/svg','g');
+    let cls='node';
+    if (s.bad) cls+=' bad';
+    if (s.id===initId) cls+=' init';
+    if (s.id===goalId) cls+=' goal';
+    if (s._expanded) cls+=' expanded';
+    if (s._onPath) cls+=' path';
+    if (s.id===selectedNode || s.id===dragFrom) cls+=' selected';
+    if (s.id===dragFrom) cls+=' drag-source';
+    const justAdded = s._justAdded; s._justAdded=false;
+    if (mode==='move' || mode===null) cls+=' move-mode';
+    if (s.id===movingId) cls+=' moving';
+    g_.setAttribute('class',cls);
+    // Position lives on this outer <g> as a plain attribute. The pop-in
+    // animation below sets a CSS `transform` on an *inner* <g> instead of
+    // here — a CSS transform on this element would replace (not compose
+    // with) this translate attribute and snap the node to (0,0).
+    g_.setAttribute('transform','translate('+s.x+','+s.y+')');
+
+    g_.addEventListener('mousedown',(e)=>{ onNodeMouseDown(e, s.id); });
+    g_.addEventListener('mouseup',(e)=>{ onNodeMouseUp(e, s.id); });
+    g_.addEventListener('click',(e)=>{ e.stopPropagation(); onNodeClick(s.id); });
+
+    const inner = document.createElementNS('http://www.w3.org/2000/svg','g');
+    inner.setAttribute('class', 'node-inner' + (justAdded ? ' just-added' : ''));
+    g_.appendChild(inner);
+
+    const circ = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circ.setAttribute('class','body'); circ.setAttribute('r','20');
+    inner.appendChild(circ);
+
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.textContent = s.id;
+    inner.appendChild(txt);
+
+    let tag='';
+    if (s.id===initId) tag='INIT';
+    else if (s.id===goalId) tag='GOAL';
+    else if (s.bad) tag='BAD';
+    if (tag){
+      const tg = document.createElementNS('http://www.w3.org/2000/svg','text');
+      tg.setAttribute('class','tag'); tg.setAttribute('y','34');
+      tg.textContent = tag;
+      inner.appendChild(tg);
+    }
+    nodeLayer.appendChild(g_);
+  }
+}
+
+// ============================================================
+// Mode buttons
+// ============================================================
+const modeHints = {
+  'add-state':'Click empty canvas to drop a new state.',
+  'add-trans':'Press and drag from a state to another state to connect them.',
+  'move':'Press and drag a state to reposition it on the canvas.',
+  'set-init':'Click a state to make it the initial state.',
+  'set-goal':'Click a state to make it the goal (incremental if a plan is loaded).',
+  'toggle-bad':'Click a state to flip its bad/safe status (incremental if a plan is loaded).',
+  'delete':'Click a state or a transition to remove it.'
+};
+
+document.querySelectorAll('.mode-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const m = btn.dataset.mode;
+    mode = (mode===m) ? null : m;
+    cancelDrag(); movingId=null; hidePanel();
+    document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
+    modeLabel.innerHTML = mode ? '<b>Mode:</b> '+btn.textContent : '<b>Mode:</b> none — click a mode button';
+    document.getElementById('mode-hint').innerHTML = mode ? modeHints[mode] : 'Pick a mode, then use the canvas. <b>+ Transition</b>: drag from one state to another.';
+  });
+});
+
+// ============================================================
+// Canvas click (add-state) + drag-to-connect (add-trans)
+// ============================================================
+svg.addEventListener('click', (e)=>{
+  if (mode !== 'add-state') return;
+  const p = svgPoint(e);
+  const id = nextStateId++;
+  states.set(id, {id, x:p.x, y:p.y, bad:false, _justAdded:true});
+  log('STATE '+id+' placed at ('+Math.round(p.x)+','+Math.round(p.y)+')');
+  toast('State '+id+' added');
+  render();
+});
+
+function onNodeMouseDown(e, id){
+  if (mode === 'add-trans' && !animating){
+    e.preventDefault(); e.stopPropagation();
+    dragFrom = id;
+    const s = states.get(id);
+    dragLineEl = document.createElementNS('http://www.w3.org/2000/svg','line');
+    dragLineEl.setAttribute('class','drag-line');
+    dragLineEl.setAttribute('x1',s.x); dragLineEl.setAttribute('y1',s.y);
+    dragLineEl.setAttribute('x2',s.x); dragLineEl.setAttribute('y2',s.y);
+    dragLayer.appendChild(dragLineEl);
+    render();
+    return;
+  }
+  if (mode === 'move' || mode === null){
+    e.preventDefault(); e.stopPropagation();
+    const s = states.get(id);
+    const p = svgPoint(e);
+    movingId = id;
+    moveOffset = { dx: s.x - p.x, dy: s.y - p.y };
+    render();
+    return;
+  }
+}
+svg.addEventListener('mousemove',(e)=>{
+  if (dragFrom!==null && dragLineEl){
+    const p = svgPoint(e);
+    dragLineEl.setAttribute('x2',p.x); dragLineEl.setAttribute('y2',p.y);
+    return;
+  }
+  if (movingId!==null){
+    const s = states.get(movingId);
+    const p = svgPoint(e);
+    s.x = p.x + moveOffset.dx;
+    s.y = p.y + moveOffset.dy;
+    render();
+  }
+});
+function onNodeMouseUp(e, id){
+  if (dragFrom===null) return;
+  e.stopPropagation();
+  if (id===dragFrom){ cancelDrag(); return; }
+  openTransPanel(dragFrom, id, e);
+}
+svg.addEventListener('mouseup', ()=>{ if (dragFrom!==null) cancelDrag(); endMove(); });
+window.addEventListener('mouseup', (e)=>{
+  if (dragFrom!==null && e.target===document.body) cancelDrag();
+  if (movingId!==null) endMove();
+});
+function cancelDrag(){
+  dragFrom = null;
+  if (dragLineEl){ dragLineEl.remove(); dragLineEl=null; }
+  render();
+}
+function endMove(){
+  if (movingId===null) return;
+  const s = states.get(movingId);
+  log('STATE '+movingId+' moved to ('+Math.round(s.x)+','+Math.round(s.y)+')');
+  movingId = null;
+  render();
+}
+
+// ============================================================
+// Transition creation / edit popover (one shared component)
+// ============================================================
+function openTransPanel(fromId, toId, evt){
+  editingTransId = null;
+  pendingConn = {from:fromId, to:toId};
+  document.getElementById('tp-verb').textContent = 'New transition';
+  document.getElementById('tp-from').textContent = fromId;
+  document.getElementById('tp-to').textContent = toId;
+  document.getElementById('tp-avail-row').style.display = 'none';
+  document.getElementById('tp-delete').style.display = 'none';
+  document.getElementById('tp-create').textContent = 'Create ↵';
+  document.getElementById('tp-cost').value = 1;
+  document.getElementById('tp-safety').value = 1;
+  document.getElementById('tp-rel').value = 1;
+  syncTpLabels();
+
+  const a = states.get(fromId), b = states.get(toId);
+  const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+  transPanel.style.left = mx+'px';
+  transPanel.style.top = my+'px';
+
+  if (dragLineEl){ dragLineEl.remove(); dragLineEl=null; }
+  dragFrom = null;
+  render();
+  requestAnimationFrame(()=>transPanel.classList.add('show'));
+}
+
+function openEditPanel(tid){
+  const t = transitions.get(tid);
+  if (!t) return;
+  editingTransId = tid;
+  pendingConn = null;
+  document.getElementById('tp-verb').textContent = 'Edit transition '+tid;
+  document.getElementById('tp-from').textContent = t.from;
+  document.getElementById('tp-to').textContent = t.to;
+  document.getElementById('tp-avail-row').style.display = 'flex';
+  updateAvailBtn(t.available);
+  document.getElementById('tp-delete').style.display = 'block';
+  document.getElementById('tp-create').textContent = 'Save';
+  document.getElementById('tp-cost').value = t.cost;
+  document.getElementById('tp-safety').value = t.safety;
+  document.getElementById('tp-rel').value = t.reliability;
+  syncTpLabels();
+
+  const a = states.get(t.from), b = states.get(t.to);
+  const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+  transPanel.style.left = mx+'px';
+  transPanel.style.top = my+'px';
+  requestAnimationFrame(()=>transPanel.classList.add('show'));
+}
+function updateAvailBtn(avail){
+  const btn = document.getElementById('tp-toggle-avail');
+  btn.textContent = avail ? 'ON' : 'OFF';
+  btn.className = avail ? 'primary' : 'danger';
+}
+document.getElementById('tp-toggle-avail').addEventListener('click', ()=>{
+  if (editingTransId===null) return;
+  const t = transitions.get(editingTransId);
+  t.available = !t.available;
+  updateAvailBtn(t.available);
+});
+document.getElementById('tp-delete').addEventListener('click', ()=>{
+  if (editingTransId===null) return;
+  const tid = editingTransId;
+  transitions.delete(tid);
+  log('DELETE transition '+tid);
+  toast('Transition '+tid+' deleted');
+  if (planLoaded){ /* endpoint rhs will be corrected on next replan pass */ }
+  hidePanel();
+  render();
+});
+
+function hidePanel(){
+  transPanel.classList.remove('show');
+  pendingConn = null;
+  editingTransId = null;
+}
+function syncTpLabels(){
+  document.getElementById('tp-cost-val').textContent = parseFloat(document.getElementById('tp-cost').value).toFixed(1);
+  document.getElementById('tp-safety-val').textContent = parseFloat(document.getElementById('tp-safety').value).toFixed(2);
+  document.getElementById('tp-rel-val').textContent = parseFloat(document.getElementById('tp-rel').value).toFixed(2);
+}
+['tp-cost','tp-safety','tp-rel'].forEach(id=>document.getElementById(id).addEventListener('input', syncTpLabels));
+document.getElementById('tp-cancel').addEventListener('click', hidePanel);
+document.getElementById('tp-create').addEventListener('click', commitPanel);
+transPanel.addEventListener('keydown',(e)=>{ if (e.key==='Enter') commitPanel(); if (e.key==='Escape') hidePanel(); });
+
+function commitPanel(){
+  const cost = parseFloat(document.getElementById('tp-cost').value);
+  const safety = parseFloat(document.getElementById('tp-safety').value);
+  const reliability = parseFloat(document.getElementById('tp-rel').value);
+
+  if (editingTransId!==null){
+    const t = transitions.get(editingTransId);
+    if (!t) { hidePanel(); return; }
+    t.cost = cost; t.safety = safety; t.reliability = reliability;
+    log('TRANS '+t.id+' updated: cost='+fmt(cost)+' safety='+fmt(safety)+' reliability='+fmt(reliability)+' available='+t.available+(planLoaded?' (incremental)':''));
+    toast('Transition '+t.id+' saved');
+    if (planLoaded) updateVertex(t.to);
+  } else if (pendingConn){
+    const tid = nextTransId++;
+    const t = {id:tid, from:pendingConn.from, to:pendingConn.to, cost, safety, reliability, available:true, _justAdded:true};
+    transitions.set(tid, t);
+    log('TRANS '+tid+' ('+t.from+'->'+t.to+') cost='+fmt(cost)+' safety='+fmt(safety)+' reliability='+fmt(reliability));
+    toast('Transition '+t.from+' → '+t.to+' created');
+    if (planLoaded) updateVertex(t.to);
+  }
+  hidePanel();
+  render();
+}
+
+// ============================================================
+// Node / edge clicks for other modes
+// ============================================================
+function onNodeClick(id){
+  if (mode==='add-trans') return; // handled by drag
+  if (mode==='set-init'){
+    if (planLoaded) log('Cold-start required to move the INITIAL state (rhs is defined relative to it). Loading fresh problem.', 'evt');
+    initId = id; planLoaded=false;
+    log('INIT = '+id); toast('Initial state set to '+id);
+    render();
+  } else if (mode==='set-goal'){
+    goalId = id;
+    log('GOAL = '+id + (planLoaded? ' (incremental — g/rhs reused)':''));
+    toast('Goal set to '+id);
+    if (planLoaded) for (const [sid] of Array.from(openSet.entries())) openSet.set(sid, calcKey(sid));
+    render();
+  } else if (mode==='toggle-bad'){
+    const s = states.get(id);
+    s.bad = !s.bad;
+    log('BAD('+id+') = '+s.bad + (planLoaded?' (incremental)':''));
+    toast('State '+id+(s.bad?' marked bad':' marked safe'));
+    if (planLoaded) for (const t of transitions.values()) if (t.from===id||t.to===id) updateVertex(t.to);
+    render();
+  } else if (mode==='delete'){
+    const neighbors = new Set();
+    for (const t of Array.from(transitions.values())){
+      if (t.from===id||t.to===id){
+        if (t.from===id) neighbors.add(t.to);
+        if (t.to===id) neighbors.add(t.from);
+        transitions.delete(t.id);
+      }
+    }
+    states.delete(id);
+    g.delete(id); rhs.delete(id); openSet.delete(id);
+    if (initId===id) initId=null;
+    if (goalId===id) goalId=null;
+    log('DELETE state '+id+' (+ incident transitions)'+(planLoaded?' (incremental)':''));
+    toast('State '+id+' deleted');
+    if (planLoaded) for (const nb of neighbors) if (states.has(nb)) updateVertex(nb);
+    render();
+  }
+}
+function onEdgeClick(tid){
+  if (mode==='delete'){
+    transitions.delete(tid);
+    log('DELETE transition '+tid);
+    toast('Transition '+tid+' deleted');
+    render();
+  } else {
+    openEditPanel(tid);
+  }
+}
+
+// ============================================================
+// Weight sliders
+// ============================================================
+function syncSliders(){
+  document.getElementById('sw-val').textContent = safetyWeight().toFixed(1);
+  document.getElementById('rw-val').textContent = reliabilityWeight().toFixed(1);
+  document.getElementById('sp-val').textContent = animSpeed().toFixed(2)+'×';
+}
+['safety-weight','reliability-weight','anim-speed'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', syncSliders);
+});
+syncSliders();
+
+// ============================================================
+// Plan / Replan (with animation)
+// ============================================================
+let animating = false;
+let stopRequested = false;
+
+function setAnimatingState(on){
+  animating = on;
+  document.getElementById('btn-plan').disabled = on;
+  document.getElementById('btn-replan').disabled = on;
+  document.getElementById('btn-stop').style.display = on ? 'block' : 'none';
+}
+
+function clearVisualState(){
+  for (const s of states.values()){ s._expanded=false; s._onPath=false; }
+  for (const t of transitions.values()){ t._onPath=false; t._pathDelay=0; }
+}
+
+async function runPlan(coldStart){
+  if (animating) return;
+  if (initId===null || goalId===null){
+    log('ERROR: set an INIT and GOAL state first.', 'err'); toast('Set an INIT and GOAL state first'); return;
+  }
+  stopRequested = false;
+  setAnimatingState(true);
+
+  clearVisualState();
+  if (coldStart || !planLoaded){ initializeSearch(); planLoaded = true; }
+  render();
+
+  logHeader(coldStart ? '— PLAN (cold start) —' : '— REPLAN (incremental) —');
+  const t0 = performance.now();
+  const expandedOrder = computeShortestPath();
+  const t1 = performance.now();
+
+  const delay = Math.max(6, 110/animSpeed());
+  for (const id of expandedOrder){
+    if (stopRequested) break;
+    const s = states.get(id); if (!s) continue;
+    s._expanded = true;
+    render();
+    await sleep(delay);
+  }
+
+  const result = extractPath();
+  const elapsed = (t1-t0).toFixed(3);
+
+  if (stopRequested){
+    log('Animation stopped by user.', 'evt');
+    toast('Animation stopped');
+    setAnimatingState(false);
+    return;
+  }
+
+  if (result){
+    for (let i=0;i<result.statePath.length;i++) states.get(result.statePath[i])._onPath = true;
+    for (let i=0;i<result.transPath.length;i++){
+      const t = transitions.get(result.transPath[i]);
+      t._onPath = true; t._pathDelay = i*(0.5/animSpeed());
+    }
+    render();
+    document.getElementById('result-status').className='ok';
+    document.getElementById('result-text').textContent = 'Path found';
+    document.getElementById('m-cost').textContent = fmt(result.totalCost);
+    document.getElementById('m-safety').textContent = fmt(result.safetyScore);
+    document.getElementById('m-expanded').textContent = expandedOrder.length;
+    document.getElementById('m-time').textContent = elapsed+'ms';
+
+    // Build detailed path description with per-edge costs
+    const edgeDetails = result.transPath.map((tid,i)=>{
+      const t = transitions.get(tid);
+      const from = result.statePath[i], to = result.statePath[i+1];
+      return '  edge '+from+'→'+to+' (trans '+tid+'): cost='+fmt(t.cost)+' safety='+fmt(t.safety)+' reliability='+fmt(t.reliability)+(t.available?'':' [UNAVAILABLE]');
+    }).join('\n');
+
+    log('━━━━ FINAL PATH RESULT ━━━━', 'hdr');
+    log('Route: '+result.statePath.join(' → '), 'ok');
+    log('Hops: '+result.transPath.length+'  |  States visited: '+result.statePath.length, 'ok');
+    log('Total path cost: '+fmt(result.totalCost), 'ok');
+    log('Safety distance (min dist to bad states): '+fmt(result.safetyScore), 'ok');
+    log('States expanded: '+expandedOrder.length+'  |  Solve time: '+elapsed+'ms', 'ok');
+    log('Edge breakdown:', 'evt');
+    edgeDetails.split('\n').forEach(l=>log(l,'evt'));
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'hdr');
+    toast('Path found — cost '+fmt(result.totalCost));
+  } else {
+    document.getElementById('result-status').className='fail';
+    document.getElementById('result-text').textContent = 'No path found';
+    document.getElementById('m-cost').textContent='—';
+    document.getElementById('m-safety').textContent='—';
+    document.getElementById('m-expanded').textContent = expandedOrder.length;
+    document.getElementById('m-time').textContent = elapsed+'ms';
+    log('━━━━ FINAL PATH RESULT ━━━━', 'hdr');
+    log('RESULT: no path — goal unreachable (graph disconnected or all routes blocked by bad states).', 'err');
+    log('States expanded: '+expandedOrder.length+'  |  Solve time: '+elapsed+'ms', 'err');
+    log('━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'hdr');
+    toast('No path found');
+  }
+
+  setAnimatingState(false);
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+document.getElementById('btn-stop').addEventListener('click', ()=>{ stopRequested = true; });
+document.getElementById('btn-plan').addEventListener('click', ()=>runPlan(true));
+document.getElementById('btn-replan').addEventListener('click', ()=>{
+  if (!planLoaded){ log('ERROR: nothing loaded yet — run PLAN first, then mutate the graph, then REPLAN.', 'err'); toast('Run Plan first'); return; }
+  runPlan(false);
+});
+document.getElementById('btn-reset').addEventListener('click', ()=>{
+  states.clear(); transitions.clear(); initId=null; goalId=null;
+  nextStateId=0; nextTransId=0; planLoaded=false; selectedNode=null; cancelDrag(); hidePanel();
+  clearLog(); log('Canvas cleared.');
+  document.getElementById('result-status').className='';
+  document.getElementById('result-text').textContent='No plan run yet';
+  ['m-cost','m-safety','m-expanded','m-time'].forEach(id=>document.getElementById(id).textContent='—');
+  render();
+});
+
+// ============================================================
+// Preset scenarios (mirrors src/main.cpp Test Cases 1-6)
+// ============================================================
+const PRESETS = {
+  tc1: {
+    label:'TC1 — Basic Reachability: a linear chain S→A→B→G with a single unique path. Tests that the planner finds and reports the only available route.',
+    guide:[
+      '① Load the scenario — you see 4 states in a line: S(0), A(1), B(2), G(3).',
+      '② Click ▶ Plan. Watch the amber expansion sweep left-to-right as LPA* settles g-values.',
+      '③ Result: path 0→1→2→3, total cost 3.0 (each edge cost=1). Only one route exists — no branching.',
+      '④ Key concept: LPA* initialises rhs(S)=0 and propagates outward. Each state becomes "consistent" (g=rhs) once popped — the green highlight shows the committed path.',
+      '⑤ Try: add a second transition directly from 0→3 with cost 0.5, then click ▶ Plan again. The planner should prefer the shortcut.'
+    ],
+    states:[[0,120,260],[1,300,260],[2,480,260],[3,660,260]],
+    trans:[[0,1,1,1,1],[1,2,1,1,1],[2,3,1,1,1]],
+    init:0, goal:3, bad:[]
+  },
+  tc2: {
+    label:'TC2 — Hard Bad-State Avoidance: state X(2) is marked bad (hard-constraint). The direct upper route S→A→X→G is structurally unreachable; planner is forced to take the longer lower route S→C→D→G.',
+    guide:[
+      '① Load — 6 states. State 2 (X) is red: bad. Two routes exist: upper via 1→2 (shorter), lower via 3→5 (longer).',
+      '② Click ▶ Plan. Notice LPA* never expands state 2 — edges touching a bad state are excluded from the search graph entirely (edgeUsable() returns false).',
+      '③ Result: path 0→3→5→4, cost 3.0, safetyDist > 0. The bad state is never visited, not even considered.',
+      '④ Key concept: hard avoidance is structural — bad states are not penalised, they are simply absent from the reachable graph. No weight tuning can route through them.',
+      '⑤ Try: click "Toggle bad" mode and click state 2 to un-mark it, then Replan. The upper route (cost 2) is now cheaper and will be chosen.'
+    ],
+    states:[[0,120,260],[1,340,140],[2,540,140],[4,760,260],[3,340,380],[5,540,380]],
+    trans:[[0,1,1,1,1],[1,2,1,1,1],[2,4,1,1,1],[0,3,1,1,1],[3,5,1,1,1],[5,4,1,1,1]],
+    init:0, goal:4, bad:[2]
+  },
+  tc3: {
+    label:'TC3 — Safety-Weight Scalarisation: two parallel routes to G. Top route is cheap (cost 2) but skims a bad state (safety=0.1 per edge). Bottom route costs more (cost 4) but stays clear (safety=0.95). Tune the Safety weight slider to flip the decision.',
+    guide:[
+      '① Load — state 4 (centre) is bad. Top path via 1: cost=1+1=2, but safety=0.1 on both edges (very close to bad state). Bottom path via 2: cost=2+2=4, safety=0.95.',
+      '② With Safety weight = 0: click ▶ Plan → top path chosen (pure cost optimisation, cost 2 wins).',
+      '③ Set Safety weight to 5, click ▶ Plan → bottom path chosen. Effective edge weight = cost*(1+rW*(1-rel)) + sW*(1-safety). At sW=5, unsafe edges incur penalty ≈ 5×0.9=4.5 each — total upper path weight ≈ 11 vs lower ≈ 4.1.',
+      '④ Key concept: this is scalarisation of the multi-objective score S(P) = αG − βC + γD + δR into a single minimisable weight. Safety weight γ trades cost for distance to hazard.',
+      '⑤ Try: slide Safety weight slowly from 0 to 6 and Replan at each step — observe the exact crossover point where the chosen route flips.'
+    ],
+    states:[[0,120,260],[1,380,140],[3,660,260],[2,380,400],[4,380,260]],
+    trans:[[0,1,1,0.1,1],[1,3,1,0.1,1],[0,2,2,0.95,1],[2,3,2,0.95,1]],
+    init:0, goal:3, bad:[4]
+  },
+  tc4: {
+    label:'TC4 — Dynamic Transition Loss & Recovery: demonstrates LPA*\'s incremental replanning. Break an edge mid-run, observe failure detection, then add an alternative route and replan — only affected vertices are reprocessed.',
+    guide:[
+      '① Load — 3 states, one path: S(0)→A(1)→G(2). Click ▶ Plan → success, cost 2.',
+      '② Click the edge between A(1) and G(2) to open its editor. Toggle availability to OFF, click Save.',
+      '③ Click ⟳ Replan → FAIL: no path. Only the vertices downstream of the broken edge are re-examined (incremental). The planner does not restart from scratch.',
+      '④ Add a detour: click "+ State" and drop state B anywhere. Then "+ Transition" mode — drag S→B (cost 1.5) and B→G (cost 1.5). Click ⟳ Replan.',
+      '⑤ Result: path 0→B→2, cost 3.0. Key concept: LPA* only reprocesses vertices whose rhs changed due to the structural update. Cold-start Plan would re-expand everything; Replan touches only what changed.',
+      '⑥ Try: re-enable the original A→G edge and Replan again — planner reverts to the cheaper route 0→1→2.'
+    ],
+    states:[[0,140,260],[1,420,260],[2,700,260]],
+    trans:[[0,1,1,1,1],[1,2,1,1,1]],
+    init:0, goal:2, bad:[]
+  },
+  tc5: {
+    label:'TC5 — Incremental Goal Change: the goal moves mid-session. LPA* reuses all existing g/rhs values — only the priority keys (which are goal-relative) are recomputed. No full re-expansion needed.',
+    guide:[
+      '① Load — 4 states. Initial goal = state 2 (right branch). Click ▶ Plan → path 0→1→2, cost 2.',
+      '② Now click "Set goal" mode, then click state 3 (lower-left). The goal badge shifts to 3.',
+      '③ Click ⟳ Replan → path 0→3, cost 1. Notice "expanded" count is very small — g/rhs for all states are reused from the previous plan.',
+      '④ Key concept: rhs(s) = min over predecessors of [g(pred) + w(pred,s)]. This formula references only predecessors\' g-values, never the goal. So rhs stays valid when the goal changes — only the key k(s) = min(g,rhs) + h(s,goal) needs updating.',
+      '⑤ Try: click "Set goal" back to state 2 and Replan again — the planner should recover the original path with near-zero re-expansion.'
+    ],
+    states:[[0,140,300],[1,420,180],[2,680,180],[3,420,420]],
+    trans:[[0,1,1,1,1],[1,2,1,1,1],[0,3,1,1,1]],
+    init:0, goal:2, bad:[]
+  },
+  tc6: {
+    label:'TC6 — Shortcut Discovery: a baseline path S→A→B→G costs 3.0. A new direct edge S→G (cost 0.5) is added mid-session. Only the vertices downstream of the new edge are re-examined on Replan.',
+    guide:[
+      '① Load — 4 states in a chain, cost 3.0. Click ▶ Plan to establish the baseline.',
+      '② Add the shortcut: "+ Transition" mode, drag from state 0 (S) directly to state 3 (G). Set cost = 0.5, safety = 1, reliability = 1. Create.',
+      '③ Click ⟳ Replan → path 0→3, cost 0.5. Only 5 vertex touches — LPA* checks whether the new edge improves rhs(G). It does (0.5 < 3.0), so G becomes inconsistent and is re-expanded. The chain states are unaffected.',
+      '④ Key concept: addTransition calls UpdateVertex(t.to). If the new edge doesn\'t improve rhs, nothing propagates. The O(affected) bound — not O(|V|) — is the core advantage of LPA* for dynamic graphs.',
+      '⑤ Try: add more shortcut edges at different costs and watch the log show exactly how many vertices are touched each time.'
+    ],
+    states:[[0,120,260],[1,360,150],[2,600,150],[3,840,260]],
+    trans:[[0,1,1,1,1],[1,2,1,1,1],[2,3,1,1,1]],
+    init:0, goal:3, bad:[]
+  },
+  blank: {
+    label:'Blank canvas — build a planning problem from scratch.',
+    guide:[
+      '① Add states: click "+ State" mode, then click the canvas to place nodes.',
+      '② Connect them: click "+ Transition" mode, then drag from one state to another. Set cost, safety (0=dangerous, 1=safe), reliability (0=unreliable, 1=always available).',
+      '③ Mark roles: use "Set init" to pick the start state, "Set goal" for the destination, "Toggle bad" to mark hazard states.',
+      '④ Click ▶ Plan to run LPA* from a cold start. Then mutate the graph (break edges, add states, toggle bad) and click ⟳ Replan for incremental updates.',
+      '⑤ Tune Safety weight and Reliability weight sliders to change how the planner trades off cost vs safety vs reliability.'
+    ],
+    states:[], trans:[], init:null, goal:null, bad:[]
+  }
+};
+
+document.getElementById('load-preset').addEventListener('click', ()=>{
+  const key = document.getElementById('preset-select').value;
+  if (!key){ log('ERROR: choose a scenario from the dropdown first.', 'err'); toast('Choose a scenario first'); return; }
+  const p = PRESETS[key];
+  states.clear(); transitions.clear(); planLoaded=false; selectedNode=null; cancelDrag(); hidePanel();
+  nextStateId=0; nextTransId=0;
+  clearLog();
+  logHeader('— LOAD '+key.toUpperCase()+' —');
+  log(p.label);
+  for (const [id,x,y] of p.states){
+    states.set(id,{id,x,y,bad:false});
+    nextStateId = Math.max(nextStateId, id+1);
+  }
+  for (const b of p.bad) if (states.has(b)) states.get(b).bad = true;
+  let tid=0;
+  for (const [from,to,cost,safety,reliability] of p.trans){
+    transitions.set(tid,{id:tid, from, to, cost, safety, reliability, available:true});
+    tid++;
+  }
+  nextTransId = tid;
+  initId = p.init; goalId = p.goal;
+  document.getElementById('result-status').className='';
+  document.getElementById('result-text').textContent='No plan run yet';
+  ['m-cost','m-safety','m-expanded','m-time'].forEach(id=>document.getElementById(id).textContent='—');
+
+  // populate guide panel
+  const gp = document.getElementById('guide-panel');
+  const gt = document.getElementById('guide-title');
+  const gs = document.getElementById('guide-steps');
+  if (p.guide && p.guide.length){
+    gt.textContent = 'Walkthrough — '+key.toUpperCase();
+    gs.innerHTML = '';
+    p.guide.forEach(step=>{
+      const d = document.createElement('div');
+      d.className = 'guide-step';
+      d.textContent = step;
+      gs.appendChild(d);
+    });
+    gp.style.display = 'block';
+    log('Guide loaded — follow the numbered steps in the right panel.', 'evt');
+  } else {
+    gp.style.display = 'none';
+  }
+
+  render();
+  toast('Scenario loaded');
+});
+
+// initial state
+log('Semantic Planner ready — LPA* over a finite Cartesian state space.');
+log('Select a scenario from the dropdown and click Load. A numbered walkthrough will appear in the right panel.');
+log('Tip: states are always draggable — grab any node to reposition it.');
+log('Tip: "+ Transition" mode → drag from one state to another to connect them.');
+log('Tip: click any edge (outside edit mode) to open its editor — toggle availability to simulate dynamic edge loss (TC4).');
+render();
+
+})();
+</script>
+</body>
+</html>
